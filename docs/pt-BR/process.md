@@ -97,7 +97,7 @@ Cada agente tem um identificador único no formato `{project}-{role}-{nn}`, por 
 | `role` | Papel, 3 letras | `orc` Orchestrator (PM), `imp` Implementer, `val` Validator |
 | `nn` | Sequência de dois dígitos por papel | `01`, `02`, … |
 
-O PO é humano e fica fora da notação: age com a própria conta do GitHub. O ELIS começa com `elis-orc-01`, `elis-imp-01`, `elis-imp-02` e `elis-val-01`.
+O PO é humano e fica fora da notação: age com a própria conta do GitHub. O ELIS começa com `elis-orc-01`, `elis-imp-01`, `elis-imp-02`, `elis-val-01` e `elis-val-02`.
 
 O mesmo identificador aparece em todos os lugares:
 
@@ -126,6 +126,9 @@ agents:
   - id: elis-val-01
     role: validator
     app: elis-val-01
+  - id: elis-val-02
+    role: validator
+    app: elis-val-02
 ```
 
 ## 5. Identidades: um GitHub App por agente
@@ -250,7 +253,7 @@ Dez workflows cobrem desenvolvimento, testes, conformidade, acionamento de agent
 | `project-sync` | Eventos de Issue, PR e CI | Move o item: `In Progress` ao abrir o Draft PR, `Review` quando o PR é marcado "ready for review", `Blocked` com a label `blocked`. | Dia 1 |
 | `agent-dispatch` | Labels, reviews e resultado do CI | Aciona o agente certo, com a identidade dele, dentro do limite de WIP. | Semana 2 |
 | `po-digest` | Semanal e sob demanda | Publica entregas, bloqueios, itens `needs-po` e os indicadores da seção 11. | Semana 2 |
-| `e2e` | PR de risco alto; toda noite em `main` | Testes funcionais ponta a ponta, com evidências anexadas ao PR. | No primeiro fluxo crítico |
+| `e2e` | Todo PR fora de draft; toda noite em `main` | Testes funcionais ponta a ponta. O `elis-gate` exige o resultado apenas em PRs de risco alto. | No primeiro fluxo crítico |
 | `eval` | PR "ready for review" com a label `research`; sob demanda | Roda o benchmark do experimento, mantém um único comentário com métricas contra o baseline e guarda os traces como artefato. Uma execução por vez. | Em repositórios de pesquisa |
 | `release` | Tag `v*` ou manual | Publica no ambiente `production` após aprovação do PO. | No primeiro piloto |
 
@@ -482,7 +485,7 @@ A adoção cabe em nove passos, e o fluxo só vale depois do teste do passo 8.
 1. Confirmar as quatro decisões da seção 1.
 2. Criar a organização, se ainda não existir, e o Project com campos, views e workflows nativos.
 3. Criar o `elis-repo-model` com os arquivos da seção 6 e protegê-lo com o próprio ruleset.
-4. Criar e instalar os Apps `elis-orc-01`, `elis-imp-01`, `elis-imp-02` e `elis-val-01`; guardar as chaves nos ambientes.
+4. Criar e instalar os Apps `elis-orc-01`, `elis-imp-01`, `elis-imp-02`, `elis-val-01` e `elis-val-02`; guardar as chaves nos ambientes.
 5. Aplicar o modelo ao repositório do ELIS: arquivos por PR, o restante pelo `bootstrap.ps1`. Antes, inventariar os 36 workflows que o repositório já tem em `.github/workflows/` e decidir, para cada um, se é mantido, substituído ou retirado.
 6. Ligar os cinco workflows do Dia 1.
 7. Criar os arquivos do modelo que ainda faltam, listados na seção 6.

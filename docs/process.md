@@ -97,7 +97,7 @@ Each agent has a unique identifier in the format `{project}-{role}-{nn}`, for ex
 | `role` | Role, 3 letters | `orc` Orchestrator (PM), `imp` Implementer, `val` Validator |
 | `nn` | Two-digit sequence per role | `01`, `02`, … |
 
-The PO is human and stays outside the notation: the PO acts with a personal GitHub account. ELIS starts with `elis-orc-01`, `elis-imp-01`, `elis-imp-02` and `elis-val-01`.
+The PO is human and stays outside the notation: the PO acts with a personal GitHub account. ELIS starts with `elis-orc-01`, `elis-imp-01`, `elis-imp-02`, `elis-val-01` and `elis-val-02`.
 
 The same identifier appears everywhere:
 
@@ -126,6 +126,9 @@ agents:
   - id: elis-val-01
     role: validator
     app: elis-val-01
+  - id: elis-val-02
+    role: validator
+    app: elis-val-02
 ```
 
 ## 5. Identities: one GitHub App per agent
@@ -250,7 +253,7 @@ Ten workflows cover development, tests, compliance, agent dispatch and managemen
 | `project-sync` | Issue, PR and CI events | Moves the item: `In Progress` when the draft PR is opened, `Review` when the PR is marked "ready for review", `Blocked` with the label `blocked`. | Day 1 |
 | `agent-dispatch` | Labels, reviews and CI results | Starts the right agent, under its own identity, within the WIP limit. | Week 2 |
 | `po-digest` | Weekly and on demand | Publishes deliveries, blockers, `needs-po` items and the indicators of section 11. | Week 2 |
-| `e2e` | High-risk PRs; every night on `main` | End-to-end functional tests, with evidence attached to the PR. | With the first critical flow |
+| `e2e` | Every PR out of draft; every night on `main` | End-to-end functional tests. `elis-gate` requires the result on high-risk PRs only. | With the first critical flow |
 | `eval` | PR "ready for review" with the label `research`; on demand | Runs the benchmark of the experiment, keeps a single comment with metrics against the baseline and stores the traces as artefacts. One run at a time. | In research repositories |
 | `release` | Tag `v*` or manual | Publishes to the `production` environment after the PO's approval. | With the first pilot |
 
@@ -482,7 +485,7 @@ Adoption takes nine steps, and the flow only counts as adopted after the test in
 1. Confirm the four decisions of section 1.
 2. Create the organisation, if it does not exist yet, and the Project with its fields, views and built-in workflows.
 3. Create `elis-repo-model` with the files of section 6 and protect it with its own ruleset.
-4. Create and install the Apps `elis-orc-01`, `elis-imp-01`, `elis-imp-02` and `elis-val-01`; store the keys in the environments.
+4. Create and install the Apps `elis-orc-01`, `elis-imp-01`, `elis-imp-02`, `elis-val-01` and `elis-val-02`; store the keys in the environments.
 5. Apply the model to the ELIS repository: files through a PR, the rest through `bootstrap.ps1`. Before that, take an inventory of the 36 workflows the repository already has in `.github/workflows/` and decide, for each one, whether it is kept, replaced or retired.
 6. Enable the five day-one workflows.
 7. Create the model files that are still missing, listed in section 6.
