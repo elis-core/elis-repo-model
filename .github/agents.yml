@@ -12,3 +12,6 @@ agents:
   - id: elis-val-01
     role: validator
     app: elis-val-01
+  - id: elis-val-02
+    role: validator
+    app: elis-val-02
