@@ -1,0 +1,28 @@
+name: Task
+description: A piece of work with a clear objective and acceptance criteria.
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: Which problem or hypothesis does this task address?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Expected result and acceptance criteria
+      description: Observable behaviour or verifiable evidence, one item per line.
+      value: |
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and constraints
+      description: Essential links, dependencies and risks.
+    validations:
+      required: false

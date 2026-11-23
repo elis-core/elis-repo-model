@@ -1,0 +1,63 @@
+# Research repositories only. Remove this form from repositories that run no AI agents.
+name: Agent anomaly
+description: Report a hallucination, a consensus loop, a schema violation or bias in an AI agent.
+labels: ["bug", "agent-anomaly"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An agent anomaly can only be fixed if it can be reproduced. Give the sample, the prompt version, the model and the seed.
+
+  - type: dropdown
+    id: failure_type
+    attributes:
+      label: Type of failure
+      options:
+        - Endless loop or consensus deadlock between agents
+        - Factual hallucination or non-existent citation
+        - Contract violation or invalid structured output
+        - Bias or loss of neutrality
+        - Context window overflow or abnormal token cost
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: affected_agents
+    attributes:
+      label: Agents and models involved
+      placeholder: "Example: screening agent (model and version) -> validation agent (model and version)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction context
+      description: Sample identifier, seed, prompt version and the relevant part of the trace.
+      placeholder: |
+        - Sample ID:
+        - Seed:
+        - Prompt version:
+        - Trace or log excerpt:
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_vs_observed
+    attributes:
+      label: Expected and observed behaviour
+      value: |
+        - Expected:
+        - Observed:
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: resolution
+    attributes:
+      label: Resolution checklist
+      description: Tick each item when the fix is merged.
+      options:
+        - label: A regression test that calls no LLM reproduces this case
+        - label: The fix does not degrade the metrics of the main benchmark

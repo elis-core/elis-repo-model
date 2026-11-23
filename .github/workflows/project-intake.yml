@@ -1,0 +1,24 @@
+name: project-intake
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+permissions: {}
+jobs:
+  intake:
+    # runs in one repository only, so two projects never convert the same draft
+    if: github.repository == vars.PORTFOLIO_REPO
+    runs-on: ubuntu-latest
+    environment: agent-orc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.ORC_APP_ID }}
+          private-key: ${{ secrets.ORC_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - run: node .github/scripts/project-intake.mjs
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PROJECT_NUMBER: ${{ vars.PROJECT_NUMBER }}

@@ -1,0 +1,67 @@
+# Research repositories only. Remove this form from repositories that run no experiments.
+name: Research hypothesis or experiment
+description: Propose a hypothesis, an agent configuration or an experiment to evaluate.
+labels: ["research"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        No experiment starts without a success metric, a baseline and a stopping rule.
+
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis
+      description: State what you expect to observe, in a form that a result can confirm or refute.
+      placeholder: "Example: adding a source-verification step reduces false positives by more than 15%."
+    validations:
+      required: true
+
+  - type: textarea
+    id: approach
+    attributes:
+      label: Approach under test
+      description: The agent configuration, prompt, protocol or pipeline change being evaluated.
+    validations:
+      required: true
+
+  - type: input
+    id: dataset
+    attributes:
+      label: Dataset and evaluation split
+      description: "Name and version, tag or hash of the dataset, and the split used."
+      placeholder: "Example: benchmark-v2.1, validation split, 500 samples"
+    validations:
+      required: true
+
+  - type: textarea
+    id: metrics
+    attributes:
+      label: Primary metrics and baseline
+      description: Which metrics decide success or failure, and what is the baseline for comparison?
+      placeholder: |
+        - Baseline: current configuration, F1 0.78
+        - Target: F1 of 0.85 or higher, cost per sample below USD 0.02
+    validations:
+      required: true
+
+  - type: textarea
+    id: stopping_rule
+    attributes:
+      label: Stopping rule
+      description: When does the experiment end, whatever the result? State the budget, the number of runs or the deadline.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: What must be true before this Issue is closed.
+      value: |
+        - [ ] The change is implemented and covered by regression tests that call no LLM
+        - [ ] The experiment ran on the stated split
+        - [ ] Metrics and traces are stored as workflow artefacts
+        - [ ] The result, positive or negative, is recorded in the research documentation
+    validations:
+      required: true

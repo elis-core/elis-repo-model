@@ -1,0 +1,146 @@
+name: project-sync
+on:
+  issues:
+    types: [labeled, unlabeled]
+  pull_request_target:
+    types: [opened, ready_for_review]
+    branches: [main]
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  sync:
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event_name == 'issues' && github.event.label.name == 'blocked') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request')
+    runs-on: ubuntu-latest
+    environment: agent-orc
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.ORC_APP_ID }}
+          private-key: ${{ secrets.ORC_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - name: Synchronise the Project status
+        uses: actions/github-script@v7
+        env:
+          PROJECT_NUMBER: ${{ vars.PROJECT_NUMBER }}
+        with:
+          github-token: ${{ steps.app.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const number = Number(process.env.PROJECT_NUMBER);
+            if (!Number.isInteger(number) || number < 1) throw new Error('Set PROJECT_NUMBER to the organisation Project number.');
+
+            const { organization } = await github.graphql(`query ($owner: String!, $number: Int!) {
+              organization(login: $owner) {
+                projectV2(number: $number) {
+                  id
+                  field(name: "Status") {
+                    ... on ProjectV2SingleSelectField { id options { id name } }
+                  }
+                }
+              }
+            }`, { owner, number });
+            const project = organization?.projectV2;
+            if (!project?.field?.id) throw new Error('The Project or its Status field is unavailable.');
+
+            async function connectionNodes(query, id, field) {
+              const nodes = [];
+              let cursor = null;
+              do {
+                const { node } = await github.graphql(query, { id, cursor });
+                const connection = node[field];
+                nodes.push(...connection.nodes);
+                cursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : null;
+              } while (cursor);
+              return nodes;
+            }
+
+            async function update(issue, proposedStatus) {
+              const { data: current } = await github.rest.issues.get({
+                owner, repo, issue_number: issue.number,
+              });
+              if (current.state !== 'open') return;
+              const blocked = current.labels.some(label => label.name === 'blocked');
+              const items = await connectionNodes(`query ($id: ID!, $cursor: String) {
+                node(id: $id) {
+                  ... on Issue {
+                    projectItems(first: 50, after: $cursor) {
+                      nodes {
+                        id
+                        isArchived
+                        project { id }
+                        fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+                      }
+                      pageInfo { hasNextPage endCursor }
+                    }
+                  }
+                }
+              }`, current.node_id, 'projectItems');
+              const item = items.find(item => item.project.id === project.id && !item.isArchived);
+              if (!item) return;
+
+              let status = blocked ? 'Blocked' : proposedStatus;
+              if (!status && context.payload.action === 'unlabeled' && item.fieldValueByName?.name === 'Blocked') {
+                const pulls = await connectionNodes(`query ($id: ID!, $cursor: String) {
+                  node(id: $id) {
+                    ... on Issue {
+                      closedByPullRequestsReferences(first: 50, after: $cursor) {
+                        nodes { state isDraft baseRefName repository { nameWithOwner } }
+                        pageInfo { hasNextPage endCursor }
+                      }
+                    }
+                  }
+                }`, current.node_id, 'closedByPullRequestsReferences');
+                const active = pulls.filter(pr => pr.state === 'OPEN' && pr.baseRefName === 'main' &&
+                  pr.repository.nameWithOwner.toLowerCase() === `${owner}/${repo}`.toLowerCase());
+                if (!active.length) {
+                  core.notice('No open pull request is linked. The Project status remains Blocked for a person to set.');
+                  return;
+                }
+                status = active.some(pr => !pr.isDraft) ? 'Review' : 'In Progress';
+              }
+              if (!status || item.fieldValueByName?.name === status) return;
+              const option = project.field.options.find(option => option.name === status);
+              if (!option) throw new Error(`The Project Status field has no "${status}" option.`);
+
+              await github.graphql(`mutation ($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $project, itemId: $item, fieldId: $field, value: {singleSelectOptionId: $option}
+                }) { projectV2Item { id } }
+              }`, { project: project.id, item: item.id, field: project.field.id, option: option.id });
+            }
+
+            if (context.eventName === 'issues') {
+              await update(context.payload.issue);
+              return;
+            }
+
+            const pulls = context.eventName === 'workflow_run'
+              ? context.payload.workflow_run.pull_requests.filter(pr => pr.base.repo.id === context.payload.repository.id)
+              : [context.payload.pull_request];
+            for (const pr of pulls) {
+              const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+              if (current.state !== 'open') continue;
+              const linked = await connectionNodes(`query ($id: ID!, $cursor: String) {
+                node(id: $id) {
+                  ... on PullRequest {
+                    closingIssuesReferences(first: 50, after: $cursor) {
+                      nodes { number repository { nameWithOwner } }
+                      pageInfo { hasNextPage endCursor }
+                    }
+                  }
+                }
+              }`, current.node_id, 'closingIssuesReferences');
+              for (const issue of linked) {
+                if (issue.repository.nameWithOwner.toLowerCase() === `${owner}/${repo}`.toLowerCase()) {
+                  await update(issue, current.draft ? 'In Progress' : 'Review');
+                }
+              }
+            }

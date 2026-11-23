@@ -1,0 +1,105 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: ${{ matrix.check }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - check: Lint
+            variable: CI_LINT_COMMAND
+          - check: Type check
+            variable: CI_TYPE_CHECK_COMMAND
+          - check: Build
+            variable: CI_BUILD_COMMAND
+          - check: Unit tests
+            variable: CI_UNIT_TEST_COMMAND
+          - check: Integration tests
+            variable: CI_INTEGRATION_TEST_COMMAND
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run the configured check
+        env:
+          CHECK_COMMAND: ${{ vars[matrix.variable] }}
+          CHECK_VARIABLE: ${{ matrix.variable }}
+        run: |
+          if [[ -n "$CHECK_COMMAND" ]]; then
+            bash -e -o pipefail -c "$CHECK_COMMAND"
+          else
+            echo "::notice::$CHECK_VARIABLE is unset. No project command is configured for this check."
+          fi
+
+  spelling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Check spelling and translation coverage
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        shell: bash
+        run: |
+          npx --yes cspell@8 --config cspell.json --dot --gitignore \
+            '**/*.{md,txt,yml,yaml,json,mjs,js,ts,jsx,tsx,py,ps1,sh}'
+          if [[ -n "$PR_TITLE" ]]; then
+            printf '%s\n' "$PR_TITLE" | npx --yes cspell@8 --config cspell.json stdin://pr-title.txt
+          fi
+          if [[ -d docs/pt-BR ]]; then
+            while IFS= read -r -d '' translation; do
+              if [[ ! -f "docs/${translation#docs/pt-BR/}" ]]; then
+                echo "::error::$translation has no English original."
+                exit 1
+              fi
+            done < <(find docs/pt-BR -type f -print0)
+          fi
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+      - name: Scan history for secrets
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.24.3
+          "$(go env GOPATH)/bin/gitleaks" git --redact .
+
+  ci:
+    name: ci
+    if: always()
+    needs: [quality, spelling, secrets]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarise CI
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          SPELLING: ${{ needs.spelling.result }}
+          SECRETS: ${{ needs.secrets.result }}
+        run: |
+          {
+            echo '## CI results'
+            echo "- Project checks: $QUALITY"
+            echo "- Spelling and translation coverage: $SPELLING"
+            echo "- Secret scanning: $SECRETS"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [[ "$QUALITY" == success && "$SPELLING" == success && "$SECRETS" == success ]]

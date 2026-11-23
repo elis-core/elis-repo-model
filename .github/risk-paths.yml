@@ -1,0 +1,11 @@
+# .github/risk-paths.yml (illustrative paths; adjust per repository)
+high:
+  - "**/auth/**"
+  - "**/migrations/**"
+  - "**/ingestion/**"
+  - "**/memory/**"
+  - ".github/**"
+low:
+  - "docs/**"
+  - "**/*.md"
+default: medium

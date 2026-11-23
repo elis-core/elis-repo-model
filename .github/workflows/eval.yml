@@ -1,0 +1,183 @@
+# Research repositories only.
+#
+# Runs the benchmark of an experiment once the pull request leaves draft, posts the
+# metrics in a single comment and keeps the traces as artefacts.
+#
+# This workflow informs; it is not a required check. Benchmarks that call an LLM vary
+# between runs, even with a fixed seed. Regression tests that call no LLM belong in `ci`.
+#
+# Set-up in each repository:
+#   - Variable EVAL_COMMAND: the command that runs the benchmark,
+#     for example `python benchmarks/run.py --output eval_metrics.json`.
+#   - Environment `eval`: holds the LLM provider keys as secrets.
+#   - Label `research` on the pull requests that must be evaluated.
+#
+# Contract: EVAL_COMMAND writes `eval_metrics.json` and may write traces to `eval_artifacts/`.
+#
+#   {
+#     "dataset": "benchmark-v2.1",
+#     "split": "validation",
+#     "seed": 42,
+#     "cost_usd": 1.23,
+#     "metrics": [
+#       { "name": "F1", "value": 0.87, "baseline": 0.85, "threshold": 0.80, "higher_is_better": true },
+#       { "name": "Hallucination rate", "value": 2.1, "threshold": 3.0, "higher_is_better": false, "unit": "%" }
+#     ]
+#   }
+
+name: eval
+
+on:
+  pull_request:
+    types: [ready_for_review, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# One evaluation at a time across the repository. GitHub keeps one run in progress and
+# one queued; a newer queued run replaces an older queued one.
+concurrency:
+  group: eval
+  cancel-in-progress: false
+
+jobs:
+  eval:
+    # Skip drafts, pull requests without the `research` label and pull requests from forks,
+    # so that provider keys are never exposed to code from outside the repository.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.draft == false &&
+       contains(github.event.pull_request.labels.*.name, 'research') &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: eval
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run the benchmark
+        env:
+          EVAL_COMMAND: ${{ vars.EVAL_COMMAND }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$EVAL_COMMAND" ]; then
+            echo "::error::Set the repository variable EVAL_COMMAND to the benchmark command."
+            exit 1
+          fi
+          bash -c "$EVAL_COMMAND"
+
+      - name: Post the evaluation report
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- eval-report -->';
+            const file = 'eval_metrics.json';
+            const show = (value, unit) =>
+              value === undefined || value === null ? 'n/a' : `${value}${unit || ''}`;
+
+            let body = `${marker}\n## Evaluation report\n\n`;
+
+            if (fs.existsSync(file)) {
+              const report = JSON.parse(fs.readFileSync(file, 'utf8'));
+              const rows = (report.metrics || []).map((metric) => {
+                let status = 'no threshold';
+                if (typeof metric.threshold === 'number') {
+                  const within = metric.higher_is_better === false
+                    ? metric.value <= metric.threshold
+                    : metric.value >= metric.threshold;
+                  status = within ? 'within threshold' : 'OUTSIDE THRESHOLD';
+                }
+                return `| ${metric.name} | ${show(metric.value, metric.unit)} | ${show(metric.baseline, metric.unit)} | ${show(metric.threshold, metric.unit)} | ${status} |`;
+              });
+              body += '| Metric | This PR | Baseline | Threshold | Status |\n';
+              body += '| --- | --- | --- | --- | --- |\n';
+              body += rows.join('\n') + '\n\n';
+              body += `Dataset: \`${show(report.dataset)}\` | Split: \`${show(report.split)}\` | `;
+              body += `Seed: \`${show(report.seed)}\` | Cost (USD): \`${show(report.cost_usd)}\` | `;
+              body += `Commit: \`${context.payload.pull_request.head.sha.slice(0, 7)}\``;
+            } else {
+              body += 'The benchmark command did not produce `eval_metrics.json`. Check the job log.';
+            }
+
+            // Update the existing report instead of adding a comment for every commit.
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Upload the evaluation artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-${{ github.event.pull_request.number || github.run_id }}
+          path: |
+            eval_metrics.json
+            eval_artifacts/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Fail when a metric is outside its threshold
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+
+          with open("eval_metrics.json", encoding="utf-8") as handle:
+              report = json.load(handle)
+
+          outside = []
+          for metric in report.get("metrics", []):
+              threshold = metric.get("threshold")
+              if not isinstance(threshold, (int, float)):
+                  continue
+              if metric.get("higher_is_better") is False:
+                  within = metric["value"] <= threshold
+              else:
+                  within = metric["value"] >= threshold
+              if not within:
+                  outside.append(f'{metric["name"]}: {metric["value"]} (threshold {threshold})')
+
+          if outside:
+              print("Metrics outside their threshold:")
+              for line in outside:
+                  print(f"  - {line}")
+              sys.exit(1)
+
+          print("All metrics are within their thresholds.")
+          PY

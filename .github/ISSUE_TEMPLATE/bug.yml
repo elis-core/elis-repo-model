@@ -1,0 +1,40 @@
+name: Bug
+description: Something behaves differently from what was specified.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: The shortest sequence that shows the problem, including version or commit.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_vs_observed
+    attributes:
+      label: Expected and observed behaviour
+      value: |
+        - Expected:
+        - Observed:
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Blocks users or corrupts data
+        - Degrades a main flow
+        - Minor or cosmetic
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Logs, screenshots or links. Remove secrets and personal data.
+    validations:
+      required: false

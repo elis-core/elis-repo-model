@@ -1,0 +1,24 @@
+- name: needs-po
+  colour: "D93F0B"
+  description: "Needs a decision from the Product Owner."
+- name: needs-refinement
+  colour: "FBCA04"
+  description: "Needs an objective, acceptance criteria and a risk assessment."
+- name: ready
+  colour: "0E8A16"
+  description: "Authorised by the Product Owner for implementation."
+- name: blocked
+  colour: "B60205"
+  description: "Work is blocked and needs a reason and an owner."
+- name: risk:high
+  colour: "B60205"
+  description: "Raises the pull request to high risk."
+- name: research
+  colour: "5319E7"
+  description: "Tracks a research experiment or its findings."
+- name: agent-anomaly
+  colour: "1D76DB"
+  description: "Records unexpected agent behaviour."
+- name: process-exception
+  colour: "D93F0B"
+  description: "Records an audited exception to the process."
