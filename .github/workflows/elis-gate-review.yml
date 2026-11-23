@@ -1,0 +1,46 @@
+# Re-runs `elis-gate` when a review is submitted or dismissed.
+#
+# A review must not start a second `elis-gate` run on the same commit: the earlier failed
+# check would stay on the commit and GitHub would keep the pull request blocked. This
+# workflow re-runs the existing run instead, so each commit has a single `elis-gate` result.
+#
+# It never checks out code and only needs permission to re-run a workflow.
+
+name: elis-gate-review
+
+on:
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  actions: write
+
+jobs:
+  rerun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Re-run elis-gate for the reviewed commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          for attempt in $(seq 1 30); do
+            latest=$(gh run list --workflow elis-gate.yml --event pull_request --commit "$HEAD_SHA" \
+              --limit 1 --json databaseId,status --jq '.[0] | "\(.databaseId) \(.status)"')
+            run_id=${latest%% *}
+            status=${latest##* }
+            if [[ -z "$latest" || "$run_id" == "null" ]]; then
+              echo "No elis-gate run for $HEAD_SHA yet (attempt $attempt)."
+            elif [[ "$status" == "completed" ]]; then
+              gh run rerun "$run_id"
+              echo "Re-ran elis-gate run $run_id."
+              exit 0
+            else
+              echo "elis-gate run $run_id is $status (attempt $attempt)."
+            fi
+            sleep 10
+          done
+          echo "::error::Could not re-run elis-gate for $HEAD_SHA."
+          exit 1
