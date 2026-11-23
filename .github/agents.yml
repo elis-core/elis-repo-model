@@ -1,17 +1,24 @@
 # .github/agents.yml
+# `model` names the AI model family the agent runs on. `elis-gate` only accepts a PASS
+# from a Validator whose model differs from the model of the pull request author.
 agents:
   - id: elis-orc-01
     role: orchestrator
     app: elis-orc-01
+    model: claude
   - id: elis-imp-01
     role: implementer
     app: elis-imp-01
+    model: claude
   - id: elis-imp-02
     role: implementer
     app: elis-imp-02
+    model: codex
   - id: elis-val-01
     role: validator
     app: elis-val-01
+    model: claude
   - id: elis-val-02
     role: validator
     app: elis-val-02
+    model: codex
