@@ -22,3 +22,6 @@
 - name: process-exception
   colour: "D93F0B"
   description: "Records an audited exception to the process."
+- name: bug
+  colour: "D73A4A"
+  description: "Something behaves differently from what was specified."
