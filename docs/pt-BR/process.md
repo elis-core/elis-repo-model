@@ -149,14 +149,14 @@ Cada agente age por um GitHub App próprio, com as permissões do seu papel. A s
 | Pull requests | write | write | write (reviews) |
 | Issues | write | write | write |
 | Actions e Checks | read | read | read |
-| Workflows | nenhuma | nenhuma | nenhuma |
+| Workflows | nenhuma | write | nenhuma |
 | Administration | nenhuma | nenhuma | nenhuma |
 | Projects da organização | write | read | read |
 
 O que essas permissões garantem sem depender do comportamento do agente:
 
 - O Validator não consegue enviar código, porque só lê o conteúdo.
-- Nenhum agente altera workflows nem regras de proteção.
+- Nenhum agente altera regras de proteção. Um Implementer pode propor mudança em workflow, mas `.github/` pertence ao PO como code owner; a mudança só é integrada com a aprovação dele.
 - Um App não aprova o próprio PR.
 - Todo commit, PR e review fica atribuído a um agente identificável.
 
@@ -257,7 +257,7 @@ Dez workflows cobrem desenvolvimento, testes, conformidade, acionamento de agent
 | --- | --- | --- | --- |
 | `ci` | PR e push em `main` | Lint, typecheck, build, testes unitários e de integração, `cspell` en-GB e `gitleaks`. Um job final `ci` resume o resultado. | Dia 1 |
 | `pr-compliance` | PR aberto ou editado | Confere nome da branch, título em Conventional Commits, Issue vinculada, seções do template e autor registrado. Habilita o auto-merge com squash. | Dia 1 |
-| `elis-gate` | PR e review | Calcula o risco pelos caminhos e exige o PASS do Validator no commit atual. | Dia 1 |
+| `elis-gate` | PR; reexecutado a cada review | Calcula o risco pelos caminhos e exige o PASS do Validator no commit atual. | Dia 1 |
 | `project-intake` | A cada 15 minutos | Converte rascunhos do Project em Issues e espelha o status `Ready` como label `ready`. | Dia 1 |
 | `project-sync` | Eventos de Issue, PR e CI | Move o item: `In Progress` ao abrir o Draft PR, `Review` quando o PR é marcado "ready for review", `Blocked` com a label `blocked`. | Dia 1 |
 | `agent-dispatch` | Labels, reviews e resultado do CI | Aciona o agente certo, com a identidade dele, dentro do limite de WIP. | Semana 2 |
@@ -273,8 +273,6 @@ name: elis-gate
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
-  pull_request_review:
-    types: [submitted, dismissed]
 permissions:
   contents: read
   pull-requests: read
@@ -291,6 +289,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
 ```
+
+Um review não dispara o `elis-gate` diretamente. Uma segunda execução no mesmo commit deixaria o check vermelho anterior no lugar, e o GitHub manteria o PR bloqueado. O workflow `elis-gate-review` reexecuta a execução existente do `elis-gate` para o commit revisado; assim cada commit tem um único resultado.
 
 O script aplica quatro regras, nesta ordem:
 
