@@ -47,7 +47,7 @@ Os formulários de Issue, o template de PR e o workflow `eval` já estão na pas
 
 ## 2. Regras centrais (`AGENTS.md`)
 
-Estas treze regras são tudo o que um agente carrega em cada sessão. O texto abaixo é o `AGENTS.md` do repositório-modelo, já em UK English.
+Estas catorze regras são tudo o que um agente carrega em cada sessão. O texto abaixo é o `AGENTS.md` do repositório-modelo, já em UK English.
 
 ```markdown
 # Agent rules
@@ -65,6 +65,7 @@ Estas treze regras são tudo o que um agente carrega em cada sessão. O texto ab
 11. Product questions go to the PO: add `needs-po`, state the question and the options, then move to the next item.
 12. No secrets or real personal data in the repository, in logs or in PR text.
 13. Record negative results. An experiment that refutes its hypothesis is documented, never silently dropped.
+14. A Validator never runs on the same model as the Implementer whose work it reviews.
 ```
 
 O restante deste documento explica como o GitHub impõe cada regra. Os agentes não precisam lê-lo a cada sessão.
@@ -117,19 +118,26 @@ agents:
   - id: elis-orc-01
     role: orchestrator
     app: elis-orc-01
+    model: claude
   - id: elis-imp-01
     role: implementer
     app: elis-imp-01
+    model: claude
   - id: elis-imp-02
     role: implementer
     app: elis-imp-02
+    model: codex
   - id: elis-val-01
     role: validator
     app: elis-val-01
+    model: claude
   - id: elis-val-02
     role: validator
     app: elis-val-02
+    model: codex
 ```
+
+Cada agente declara a família de modelo em que roda. Um Validator só revisa o trabalho de um Implementer de outro modelo; os pares são `elis-imp-01` com `elis-val-02` e `elis-imp-02` com `elis-val-01`. O `elis-gate` ignora o review de um Validator do mesmo modelo do autor do PR.
 
 ## 5. Identidades: um GitHub App por agente
 
@@ -154,11 +162,12 @@ O que essas permissões garantem sem depender do comportamento do agente:
 
 ### Como o PASS fica infalsificável
 
-O Validator registra PASS ou FAIL como review nativo do PR: "Approve" ou "Request changes". O check obrigatório `elis-gate` só aceita um PASS quando três condições valem:
+O Validator registra PASS ou FAIL como review nativo do PR: "Approve" ou "Request changes". O check obrigatório `elis-gate` só aceita um PASS quando quatro condições valem:
 
 1. O autor do review está registrado como `validator` no `agents.yml` da branch `main`.
 2. O review se refere ao commit atual do PR.
 3. O autor do PR está registrado como `implementer`.
+4. O `model` do Validator é diferente do `model` do autor do PR.
 
 Mudar o `agents.yml` ou o próprio `elis-gate` exige um PR em `.github/`. O `CODEOWNERS` atribui essa pasta ao PO, e o ruleset exige a aprovação dele.
 
@@ -186,7 +195,7 @@ Um repositório `elis-repo-model`, marcado como template na organização, cont�
 
 ```text
 elis-repo-model/
-├─ AGENTS.md                     # the thirteen agent rules (section 2)
+├─ AGENTS.md                     # the fourteen agent rules (section 2)
 ├─ README.md
 ├─ cspell.json                   # en-GB dictionary
 ├─ docs/
@@ -287,7 +296,7 @@ O script aplica quatro regras, nesta ordem:
 
 1. O autor do PR é um `implementer` registrado; senão, falha.
 2. A classe de risco é a mais alta entre os caminhos alterados. A label `risk:high` eleva; nada reduz.
-3. Risco baixo passa. Risco médio ou alto exige que o review mais recente de um `validator` registrado seja "Approve" no commit atual.
+3. Risco baixo passa. Risco médio ou alto exige que o review mais recente de um `validator` registrado, de modelo diferente do autor, seja "Approve" no commit atual.
 4. Risco alto exige também o check `e2e` verde no mesmo commit.
 
 ### `project-intake`: do rascunho à Issue

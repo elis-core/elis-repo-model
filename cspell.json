@@ -4,7 +4,7 @@
   "ignorePaths": ["docs/pt-BR/**"],
   "ignoreRegExpList": ["/colour: \"[0-9A-Fa-f]{6}\"/"],
   "words": [
-    "anthropics", "cspell", "elis", "gitleaks", "GOPATH",
+    "anthropics", "codex", "cspell", "elis", "gitleaks", "GOPATH",
     "graphql", "isinstance", "labelable", "labeled", "LASTEXITCODE", "mermaid",
     "pipefail", "reprioritise", "Rocha", "rochasamurai", "ruleset",
     "rulesets", "unlabeled", "vars", "worktree",

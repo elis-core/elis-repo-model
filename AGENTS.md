@@ -13,3 +13,4 @@
 11. Product questions go to the PO: add `needs-po`, state the question and the options, then move to the next item.
 12. No secrets or real personal data in the repository, in logs or in PR text.
 13. Record negative results. An experiment that refutes its hypothesis is documented, never silently dropped.
+14. A Validator never runs on the same model as the Implementer whose work it reviews.

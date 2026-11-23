@@ -17,14 +17,15 @@ function agents() {
   if (header !== 'agents:') throw new Error('Expected the agents registry.');
   const entries = [];
   for (const line of lines) {
-    const field = /^(?:- (id)|(role|app)):\s*([a-z0-9-]+)$/.exec(line);
+    const field = /^(?:- (id)|(role|app|model)):\s*([a-z0-9-]+)$/.exec(line);
     if (!field) throw new Error('Invalid agent registry entry.');
     const [, id, property, value] = field;
     if (id) entries.push({ id: value });
     else entries.at(-1)[property] = value;
   }
-  if (entries.some(entry => !entry.app || !['orchestrator', 'implementer', 'validator'].includes(entry.role))) {
-    throw new Error('Each agent needs an App and a recognised role.');
+  if (entries.some(entry => !entry.app || !entry.model ||
+      !['orchestrator', 'implementer', 'validator'].includes(entry.role))) {
+    throw new Error('Each agent needs an App, a model and a recognised role.');
   }
   return entries;
 }
@@ -92,10 +93,11 @@ async function main() {
   const pullPath = `/pulls/${PR_NUMBER}`;
   const pull = await (await request(repository + pullPath)).json();
   const registered = agents();
-  const belongsTo = (user, role) => user?.type === 'Bot' && registered.some(agent =>
-    agent.role === role && `${agent.app}[bot]`.toLowerCase() === user.login.toLowerCase());
+  const agentFor = (user, role) => (user?.type === 'Bot' && registered.find(agent =>
+    agent.role === role && `${agent.app}[bot]`.toLowerCase() === user.login.toLowerCase())) || undefined;
 
-  if (!belongsTo(pull.user, 'implementer')) throw new Error('The pull request author is not a registered Implementer.');
+  const author = agentFor(pull.user, 'implementer');
+  if (!author) throw new Error('The pull request author is not a registered Implementer.');
 
   const eventHead = GITHUB_EVENT_PATH &&
     JSON.parse(readFileSync(GITHUB_EVENT_PATH, 'utf8')).pull_request?.head.sha;
@@ -113,10 +115,15 @@ async function main() {
   if (risk === 'low') return;
 
   const reviews = await pages(`${pullPath}/reviews?per_page=100`);
-  const latest = reviews.filter(review => review.submitted_at && belongsTo(review.user, 'validator'))
+  // Only a Validator that runs on a different model from the author can give a PASS or a FAIL.
+  const independent = review => {
+    const validator = agentFor(review.user, 'validator');
+    return validator && validator.model !== author.model;
+  };
+  const latest = reviews.filter(review => review.submitted_at && independent(review))
     .sort((left, right) => Date.parse(right.submitted_at) - Date.parse(left.submitted_at) || right.id - left.id)[0];
   if (latest?.state !== 'APPROVED' || latest.commit_id !== pull.head.sha) {
-    throw new Error('The latest Validator review must approve the current commit.');
+    throw new Error('The latest review by a Validator on a different model from the author must approve the current commit.');
   }
 
   if (risk === 'high') {
