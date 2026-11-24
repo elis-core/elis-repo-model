@@ -260,7 +260,7 @@ Ten workflows cover development, tests, compliance, agent dispatch and managemen
 | `elis-gate` | PR; re-run on every review | Computes the risk from the paths and requires the Validator's PASS on the current commit. | Day 1 |
 | `project-intake` | Every 15 minutes | Converts Project drafts into Issues and mirrors the `Ready` status as the label `ready`. | Day 1 |
 | `project-sync` | Issue, PR and CI events | Moves the item: `In Progress` when the draft PR is opened, `Review` when the PR is marked "ready for review", `Blocked` with the label `blocked`. | Day 1 |
-| `agent-dispatch` | Labels, reviews and CI results | Starts the right agent, under its own identity, within the WIP limit. | Week 2 |
+| `agent-dispatch` | Labels, PR and CI events; every 30 minutes | Starts the right agent, under its own identity, within the WIP limit and the daily budget. | Week 2 |
 | `po-digest` | Weekly and on demand | Publishes deliveries, blockers, `needs-po` items and the indicators of section 11. | Week 2 |
 | `e2e` | Every PR out of draft; every night on `main` | End-to-end functional tests. `elis-gate` requires the result on high-risk PRs only. | With the first critical flow |
 | `eval` | PR "ready for review" with the label `research`; on demand | Runs the benchmark of the experiment, keeps a single comment with metrics against the baseline and stores the traces as artefacts. One run at a time. | In research repositories |
@@ -339,7 +339,18 @@ The script reads the Project through the GraphQL API. Each draft with the `Produ
 | Medium- or high-risk PR marked "ready for review", with green CI | `val` | Validate the current commit |
 | "Request changes" review or red CI | the `imp` who authored the PR | Fix in the same PR |
 
-The workflow generates the token of the agent's App and starts the agent's session on the runner, for example with `anthropics/claude-code-action`. If the agents run on your own machine, the same workflow runs on a self-hosted runner. When WIP is at its limit, dispatch waits.
+The workflow has two jobs. `route` reads the state of the repository and decides who is started; `agent` generates the token of the agent's App and runs one session per decision on a GitHub-hosted runner: `anthropics/claude-code-action` for agents on `claude` and `openai/codex-action` for agents on `codex`. If the agents run on your own machine, the same workflow runs on a self-hosted runner.
+
+- **State, not events.** Events only wake the workflow up, and it also runs every 30 minutes. A missed event is picked up by the next run.
+- **Record.** Before each dispatch the Orchestrator leaves a comment on the Issue or PR. Those comments prevent a second dispatch for the same commit or review and count the attempts.
+- **WIP.** An Implementer with an open PR is busy, and at most three PRs are out of draft. When WIP is at its limit, dispatch waits and the next run starts the work.
+- **Budget.** At most 20 dispatches a day (variable `AGENT_DAILY_LIMIT`), 45 minutes per session, two attempts to implement an Issue and three to fix or to validate a PR. At the limit, dispatch stops and adds `needs-po`.
+- **Switch.** Dispatch only runs while the variable `AGENT_DISPATCH` is `on`.
+- **Keys.** Each session receives the token of its own App and the provider key of its own model (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, as environment secrets).
+- **Read-only sessions.** The Orchestrator and the Validator sessions hold no GitHub token and cannot execute anything. They read the Issue, the diff and the check results, and return a result that a later step publishes as the Issue body or as the review. The Validator's test evidence is therefore the result of `ci` and `e2e` on the commit under review.
+- **Trusted input.** Only Issues opened by a member of the organisation or by a registered agent are dispatched.
+
+The instructions of each task are in `.github/agent-prompts/` and are always read from `main`.
 
 ### Known limits
 
