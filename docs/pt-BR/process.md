@@ -260,7 +260,7 @@ Dez workflows cobrem desenvolvimento, testes, conformidade, acionamento de agent
 | `elis-gate` | PR; reexecutado a cada review | Calcula o risco pelos caminhos e exige o PASS do Validator no commit atual. | Dia 1 |
 | `project-intake` | A cada 15 minutos | Converte rascunhos do Project em Issues e espelha o status `Ready` como label `ready`. | Dia 1 |
 | `project-sync` | Eventos de Issue, PR e CI | Move o item: `In Progress` ao abrir o Draft PR, `Review` quando o PR é marcado "ready for review", `Blocked` com a label `blocked`. | Dia 1 |
-| `agent-dispatch` | Labels, reviews e resultado do CI | Aciona o agente certo, com a identidade dele, dentro do limite de WIP. | Semana 2 |
+| `agent-dispatch` | Labels, eventos de PR e de CI; a cada 30 minutos | Aciona o agente certo, com a identidade dele, dentro do limite de WIP e do orçamento diário. | Semana 2 |
 | `po-digest` | Semanal e sob demanda | Publica entregas, bloqueios, itens `needs-po` e os indicadores da seção 11. | Semana 2 |
 | `e2e` | Todo PR fora de draft; toda noite em `main` | Testes funcionais ponta a ponta. O `elis-gate` exige o resultado apenas em PRs de risco alto. | No primeiro fluxo crítico |
 | `eval` | PR "ready for review" com a label `research`; sob demanda | Roda o benchmark do experimento, mantém um único comentário com métricas contra o baseline e guarda os traces como artefato. Uma execução por vez. | Em repositórios de pesquisa |
@@ -339,7 +339,18 @@ O script lê o Project pela API GraphQL. Cada rascunho com o campo `Product` pre
 | PR de risco médio ou alto marcado "ready for review", com CI verde | `val` | Validar o commit atual |
 | Review "Request changes" ou CI vermelho | `imp` autor do PR | Corrigir no mesmo PR |
 
-O workflow gera o token do App do agente e inicia a sessão dele no runner, por exemplo com `anthropics/claude-code-action`. Se os agentes executarem na sua máquina, o mesmo workflow roda em um runner self-hosted. Quando o WIP está no limite, o acionamento espera.
+O workflow tem dois jobs. O `route` lê o estado do repositório e decide quem é acionado; o `agent` gera o token do App do agente e roda uma sessão por decisão em um runner do GitHub: `anthropics/claude-code-action` para agentes `claude` e `openai/codex-action` para agentes `codex`. Se os agentes executarem na sua máquina, o mesmo workflow roda em um runner self-hosted.
+
+- **Estado, não eventos.** Os eventos só acordam o workflow, que também roda a cada 30 minutos. Um evento perdido é recuperado na execução seguinte.
+- **Registro.** Antes de cada acionamento, o Orchestrator deixa um comentário na Issue ou no PR. Esses comentários impedem um segundo acionamento para o mesmo commit ou review e contam as tentativas.
+- **WIP.** Um Implementer com PR aberto está ocupado, e no máximo três PRs ficam fora de draft. Quando o WIP está no limite, o acionamento espera e a execução seguinte inicia o trabalho.
+- **Orçamento.** No máximo 20 acionamentos por dia (variável `AGENT_DAILY_LIMIT`), 45 minutos por sessão, duas tentativas de implementar uma Issue e três de corrigir ou de validar um PR. No limite, o acionamento para e aplica `needs-po`.
+- **Chave geral.** O acionamento só roda enquanto a variável `AGENT_DISPATCH` vale `on`.
+- **Chaves.** Cada sessão recebe o token do próprio App e a chave do provedor do próprio modelo (`ANTHROPIC_API_KEY` ou `OPENAI_API_KEY`, como segredos de ambiente).
+- **Sessões somente leitura.** As sessões do Orchestrator e do Validator não têm token do GitHub e não executam nada. Leem a Issue, o diff e o resultado dos checks, e devolvem um resultado que uma etapa posterior publica como corpo da Issue ou como review. A evidência de teste do Validator é, portanto, o resultado de `ci` e `e2e` no commit revisado.
+- **Entrada confiável.** Só são acionadas Issues abertas por um membro da organização ou por um agente registrado.
+
+As instruções de cada tarefa ficam em `.github/agent-prompts/` e são sempre lidas da `main`.
 
 ### Limites conhecidos
 
